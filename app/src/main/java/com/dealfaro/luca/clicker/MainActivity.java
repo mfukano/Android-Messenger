@@ -16,7 +16,6 @@ import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ArrayAdapter;
-import android.widget.Button;
 import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.ListView;
@@ -103,23 +102,7 @@ public class MainActivity extends ActionBarActivity {
 
             // Fills in the view.
             TextView tv = (TextView) newView.findViewById(R.id.itemText);
-            Button b = (Button) newView.findViewById(R.id.itemButton);
             tv.setText(w.textLabel);
-            b.setText(w.buttonLabel);
-
-            // Sets a listener for the button, and a tag for the button as well.
-            b.setTag(new Integer(position));
-            b.setOnClickListener(new View.OnClickListener() {
-                @Override
-                public void onClick(View v) {
-                    // Reacts to a button press.
-                    // Gets the integer tag of the button.
-                    String s = v.getTag().toString();
-                    int duration = Toast.LENGTH_SHORT;
-                    Toast toast = Toast.makeText(context, s, duration);
-                    toast.show();
-                }
-            });
 
             // Set a listener for the whole list item.
             newView.setTag(w.textLabel);
@@ -215,14 +198,11 @@ public class MainActivity extends ActionBarActivity {
     /*
     private void displayAccuracy(Location location) {
         // Displays the accuracy.
-        TextView labelView = (TextView) findViewById(R.id.locationView);
         TextView accView = (TextView) findViewById(R.id.accuracyView);
         if (location == null) {
-            labelView.setVisibility(View.INVISIBLE);
             accView.setVisibility(View.INVISIBLE);
         } else {
             String acc = String.format("%5.1f m", location.getAccuracy());
-            labelView.setVisibility(View.VISIBLE);
             accView.setText(acc);
             accView.setVisibility(View.VISIBLE);
             // Colors the accuracy.
@@ -241,15 +221,15 @@ public class MainActivity extends ActionBarActivity {
      */
 
     String randomString(final int length) {
-        Random r = new Random(); // perhaps make it a class variable so you don't make a new one every time
+        char[] chars = "abcdefghijklmnopqrstuvwxyz1234567890".toCharArray();
         StringBuilder sb = new StringBuilder();
-        for(int i = 0; i < length; i++) {
-            char c = (char)(r.nextInt((int)(Character.MAX_VALUE)));
+        Random random = new Random();
+        for (int i = 0; i < length; i++) {
+            char c = chars[random.nextInt(chars.length)];
             sb.append(c);
-        }
+            }
         return sb.toString();
     }
-
 
     public void clickButton(View v) {
 
@@ -260,15 +240,10 @@ public class MainActivity extends ActionBarActivity {
         // Then, we start the call.
         PostMessageSpec myCallSpec = new PostMessageSpec();
 
-        // TODO: determine put_local / get_local here for server calls
         myCallSpec.url = SERVER_URL_PREFIX + "put_local";
         myCallSpec.context = MainActivity.this;
         // Let's add the parameters.
         HashMap<String,String> m = new HashMap<String,String>();
-        /* TODO: modify hashmap to contain Location tuple <lat, lng> and
-         message tuple <msg, msg_id>     */
-
-        //location tuple buildup
         m.put("lat", Double.toString(latitude));
         m.put("lng", Double.toString(longitude));
         m.put("msgid", randomString(8));
@@ -333,10 +308,15 @@ public class MainActivity extends ActionBarActivity {
         aList.clear();
         for (int i = 0; i < ml.messages.length; i++) {
             ListElement ael = new ListElement();
-            ael.textLabel = ml.messages[i];
-            ael.buttonLabel = "Click";
+            /* adds the message body to the text label in the app view
+            -- pulls this from the message class by indexing into the message
+            -- list and obtaining the type */
+            ael.textLabel = ml.messages[i].msg;
             aList.add(ael);
         }
+        aa = new MyAdapter(this, R.layout.list_element, aList);
+        ListView myListView = (ListView) findViewById(R.id.listView);
+        myListView.setAdapter(aa);
         aa.notifyDataSetChanged();
     }
 
