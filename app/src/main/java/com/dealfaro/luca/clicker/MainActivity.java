@@ -3,6 +3,8 @@ package com.dealfaro.luca.clicker;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.location.Location;
+import android.location.LocationListener;
+import android.location.LocationManager;
 import android.os.Bundle;
 import android.preference.PreferenceManager;
 import android.support.v7.app.ActionBarActivity;
@@ -28,6 +30,7 @@ import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Random;
 
 
 public class MainActivity extends ActionBarActivity {
@@ -35,6 +38,8 @@ public class MainActivity extends ActionBarActivity {
     Location lastLocation;
     private double lastAccuracy = (double) 1e10;
     private long lastAccuracyTime = 0;
+    double latitude;
+    double longitude;
 
     private static final String LOG_TAG = "lclicker";
 
@@ -162,18 +167,87 @@ public class MainActivity extends ActionBarActivity {
         if (result != null) {
             displayResult(result);
         }
+        LocationManager locationManager = (LocationManager) this.getSystemService(Context.LOCATION_SERVICE);
+        locationManager.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, 0, 0, locationListener);
+        locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 0, 0, locationListener);
     }
 
 
 
     @Override
     protected void onPause() {
+        LocationManager locationManager = (LocationManager) this.getSystemService(Context.LOCATION_SERVICE);
+        locationManager.removeUpdates(locationListener);
         // Stops the upload if any.
         if (uploader != null) {
             uploader.cancel(true);
             uploader = null;
         }
         super.onPause();
+    }
+
+
+    /**
+     * Listens to the location, and gets the most precise recent location.
+     */
+    LocationListener locationListener = new LocationListener() {
+        @Override
+        public void onLocationChanged(Location location) {
+            longitude = location.getLongitude();
+            latitude = location.getLatitude();
+            lastLocation = location;
+        }
+
+        @Override
+        public void onStatusChanged(String provider, int status, Bundle extras) {}
+
+        @Override
+        public void onProviderEnabled(String provider) {}
+
+        @Override
+        public void onProviderDisabled(String provider) {}
+    };
+
+    /**
+     * Displays the accuracy to the user.
+     * //@param location
+     */
+    /*
+    private void displayAccuracy(Location location) {
+        // Displays the accuracy.
+        TextView labelView = (TextView) findViewById(R.id.locationView);
+        TextView accView = (TextView) findViewById(R.id.accuracyView);
+        if (location == null) {
+            labelView.setVisibility(View.INVISIBLE);
+            accView.setVisibility(View.INVISIBLE);
+        } else {
+            String acc = String.format("%5.1f m", location.getAccuracy());
+            labelView.setVisibility(View.VISIBLE);
+            accView.setText(acc);
+            accView.setVisibility(View.VISIBLE);
+            // Colors the accuracy.
+            if (location.getAccuracy() < GOOD_ACCURACY_METERS) {
+                accView.setTextColor(Color.parseColor("#006400")); // Dark green
+            } else {
+                accView.setTextColor(Color.parseColor("#8b0000")); // Dark red
+            }
+        }
+    }         */
+
+    /*
+        Random string builder code pulled from StackOverflow
+        This snippet will help to create message ID numbers
+        src: http://stackoverflow.com/a/5683359
+     */
+
+    String randomString(final int length) {
+        Random r = new Random(); // perhaps make it a class variable so you don't make a new one every time
+        StringBuilder sb = new StringBuilder();
+        for(int i = 0; i < length; i++) {
+            char c = (char)(r.nextInt((int)(Character.MAX_VALUE)));
+            sb.append(c);
+        }
+        return sb.toString();
     }
 
 
@@ -186,13 +260,21 @@ public class MainActivity extends ActionBarActivity {
         // Then, we start the call.
         PostMessageSpec myCallSpec = new PostMessageSpec();
 
-
-        myCallSpec.url = SERVER_URL_PREFIX + "post_msg.json";
+        // TODO: determine put_local / get_local here for server calls
+        myCallSpec.url = SERVER_URL_PREFIX + "put_local";
         myCallSpec.context = MainActivity.this;
         // Let's add the parameters.
         HashMap<String,String> m = new HashMap<String,String>();
-        m.put("app_id", MY_APP_ID);
+        /* TODO: modify hashmap to contain Location tuple <lat, lng> and
+         message tuple <msg, msg_id>     */
+
+        //location tuple buildup
+        m.put("lat", Double.toString(latitude));
+        m.put("lng", Double.toString(longitude));
+        m.put("msgid", randomString(8));
         m.put("msg", msg);
+
+
         myCallSpec.setParams(m);
         // Actual server call.
         if (uploader != null) {
