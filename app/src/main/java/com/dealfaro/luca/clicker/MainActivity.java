@@ -8,13 +8,13 @@ import android.location.LocationManager;
 import android.os.Bundle;
 import android.preference.PreferenceManager;
 import android.support.v7.app.ActionBarActivity;
-import android.util.Base64;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.inputmethod.InputMethodManager;
 import android.widget.ArrayAdapter;
 import android.widget.EditText;
 import android.widget.LinearLayout;
@@ -24,8 +24,6 @@ import android.widget.Toast;
 
 import com.google.gson.Gson;
 
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -179,6 +177,9 @@ public class MainActivity extends ActionBarActivity {
             longitude = location.getLongitude();
             latitude = location.getLatitude();
             lastLocation = location;
+            TextView tv = (TextView) findViewById(R.id.accuracyView);
+            String s = String.format("%f m\n%f m", latitude, longitude);
+            tv.setText(s);
         }
 
         @Override
@@ -191,28 +192,6 @@ public class MainActivity extends ActionBarActivity {
         public void onProviderDisabled(String provider) {}
     };
 
-    /**
-     * Displays the accuracy to the user.
-     * //@param location
-     */
-    /*
-    private void displayAccuracy(Location location) {
-        // Displays the accuracy.
-        TextView accView = (TextView) findViewById(R.id.accuracyView);
-        if (location == null) {
-            accView.setVisibility(View.INVISIBLE);
-        } else {
-            String acc = String.format("%5.1f m", location.getAccuracy());
-            accView.setText(acc);
-            accView.setVisibility(View.VISIBLE);
-            // Colors the accuracy.
-            if (location.getAccuracy() < GOOD_ACCURACY_METERS) {
-                accView.setTextColor(Color.parseColor("#006400")); // Dark green
-            } else {
-                accView.setTextColor(Color.parseColor("#8b0000")); // Dark red
-            }
-        }
-    }         */
 
     /*
         Random string builder code pulled from StackOverflow
@@ -231,8 +210,26 @@ public class MainActivity extends ActionBarActivity {
         return sb.toString();
     }
 
-    public void clickButton(View v) {
+    public void refresh(View v) {
+        PostMessageSpec myCallSpec = new PostMessageSpec();
+        myCallSpec.url = SERVER_URL_PREFIX + "get_local";
+        myCallSpec.context = MainActivity.this;
+        // Let's add the parameters.
+        HashMap<String,String> m = new HashMap<String,String>();
+        m.put("lat", Double.toString(latitude));
+        m.put("lng", Double.toString(longitude));
 
+        myCallSpec.setParams(m);
+        // Actual server call.
+        if (uploader != null) {
+            // There was already an upload in progress.
+            uploader.cancel(true);
+        }
+        uploader = new ServerCall();
+        uploader.execute(myCallSpec);
+     }
+
+    public void clickButton(View v) {
         // Get the text we want to send.
         EditText et = (EditText) findViewById(R.id.editText);
         String msg = et.getText().toString();
@@ -249,7 +246,6 @@ public class MainActivity extends ActionBarActivity {
         m.put("msgid", randomString(8));
         m.put("msg", msg);
 
-
         myCallSpec.setParams(m);
         // Actual server call.
         if (uploader != null) {
@@ -258,23 +254,17 @@ public class MainActivity extends ActionBarActivity {
         }
         uploader = new ServerCall();
         uploader.execute(myCallSpec);
-    }
+        //hideSoftKeyboard(MainActivity.this, v);
 
-
-    private String reallyComputeHash(String s) {
-        // Computes the crypto hash of string s, in a web-safe format.
-        try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            digest.update(s.getBytes());
-            digest.update("My secret key".getBytes());
-            byte[] md = digest.digest();
-            // Now we need to make it web safe.
-            String safeDigest = Base64.encodeToString(md, Base64.URL_SAFE);
-            return safeDigest;
-        } catch (NoSuchAlgorithmException e) {
-            e.printStackTrace();
-        }
-        return "";
+        /*  Snippet of code to remove focus from editText upon posting a message.
+         *  http://stackoverflow.com/a/17491896
+         */
+        InputMethodManager inputManager = (InputMethodManager)
+                                          getSystemService(Context.INPUT_METHOD_SERVICE);
+        inputManager.hideSoftInputFromWindow(getCurrentFocus().getWindowToken(),
+                                             InputMethodManager.HIDE_NOT_ALWAYS);
+        et.setText("");
+        et.clearFocus();
     }
 
 
@@ -299,7 +289,6 @@ public class MainActivity extends ActionBarActivity {
             }
         }
     }
-
 
     private void displayResult(String result) {
         Gson gson = new Gson();
