@@ -1,10 +1,13 @@
 package com.dealfaro.luca.clicker;
 
+import android.app.ProgressDialog;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.location.Location;
 import android.location.LocationListener;
 import android.location.LocationManager;
+import android.net.ConnectivityManager;
+import android.net.NetworkInfo;
 import android.os.Bundle;
 import android.preference.PreferenceManager;
 import android.support.v7.app.ActionBarActivity;
@@ -24,54 +27,44 @@ import android.widget.Toast;
 
 import com.google.gson.Gson;
 
+import java.text.SimpleDateFormat;
+import java.text.DateFormat;
+import java.text.ParseException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Random;
+import java.util.TimeZone;
+import java.util.Date;
 
 
 public class MainActivity extends ActionBarActivity {
-
     Location lastLocation;
-    private double lastAccuracy = (double) 1e10;
-    private long lastAccuracyTime = 0;
-    double latitude;
-    double longitude;
-
     private static final String LOG_TAG = "lclicker";
-
+    private static final String SERVER_URL_PREFIX = "https://luca-teaching.appspot.com/store/default/";
     private static final float GOOD_ACCURACY_METERS = 100;
 
-    // This is an id for my app, to keep the key space separate from other apps.
-    private static final String MY_APP_ID = "luca_bboard";
-
-    private static final String SERVER_URL_PREFIX = "https://luca-teaching.appspot.com/store/default/";
-
-    // To remember the favorite account.
-    public static final String PREF_ACCOUNT = "pref_account";
+    private String lat;
+    private String lng;
 
     // To remember the post we received.
     public static final String PREF_POSTS = "pref_posts";
 
     // Uploader.
     private ServerCall uploader;
-
-    // Remember whether we have already successfully checked in.
-    private boolean checkinSuccessful = false;
-
-    private ArrayList<String> accountList;
+    private ProgressDialog progress;
 
     private class ListElement {
-        ListElement() {};
-
+        ListElement() {}
         public String textLabel;
-        public String buttonLabel;
+        public String timeText;
+        public String timeStamp;
+        public String messageID;
     }
 
     private ArrayList<ListElement> aList;
 
     private class MyAdapter extends ArrayAdapter<ListElement> {
-
         int resource;
         Context context;
 
@@ -85,7 +78,6 @@ public class MainActivity extends ActionBarActivity {
         @Override
         public View getView(int position, View convertView, ViewGroup parent) {
             LinearLayout newView;
-
             ListElement w = getItem(position);
 
             // Inflate a new view if necessary.
@@ -93,7 +85,7 @@ public class MainActivity extends ActionBarActivity {
                 newView = new LinearLayout(getContext());
                 String inflater = Context.LAYOUT_INFLATER_SERVICE;
                 LayoutInflater vi = (LayoutInflater) getContext().getSystemService(inflater);
-                vi.inflate(resource,  newView, true);
+                vi.inflate(resource, newView, true);
             } else {
                 newView = (LinearLayout) convertView;
             }
@@ -102,8 +94,11 @@ public class MainActivity extends ActionBarActivity {
             TextView tv = (TextView) newView.findViewById(R.id.itemText);
             tv.setText(w.textLabel);
 
+            TextView cv = (TextView) newView.findViewById(R.id.timeSince);
+            cv.setText(w.timeText);
+
             // Set a listener for the whole list item.
-            newView.setTag(w.textLabel);
+            newView.setTag(w.messageID);
             newView.setOnClickListener(new View.OnClickListener() {
                 @Override
                 public void onClick(View v) {
@@ -113,19 +108,17 @@ public class MainActivity extends ActionBarActivity {
                     toast.show();
                 }
             });
-
             return newView;
         }
     }
 
     private MyAdapter aa;
 
-
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-        aList = new ArrayList<ListElement>();
+        aList = new ArrayList<>();
         aa = new MyAdapter(this, R.layout.list_element, aList);
         ListView myListView = (ListView) findViewById(R.id.listView);
         myListView.setAdapter(aa);
@@ -136,7 +129,6 @@ public class MainActivity extends ActionBarActivity {
     protected void onStart() {
         super.onStart();
     }
-
 
     @Override
     protected void onResume() {
@@ -153,8 +145,6 @@ public class MainActivity extends ActionBarActivity {
         locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 0, 0, locationListener);
     }
 
-
-
     @Override
     protected void onPause() {
         LocationManager locationManager = (LocationManager) this.getSystemService(Context.LOCATION_SERVICE);
@@ -167,106 +157,248 @@ public class MainActivity extends ActionBarActivity {
         super.onPause();
     }
 
-
     /**
      * Listens to the location, and gets the most precise recent location.
      */
     LocationListener locationListener = new LocationListener() {
         @Override
         public void onLocationChanged(Location location) {
-            longitude = location.getLongitude();
-            latitude = location.getLatitude();
             lastLocation = location;
             TextView tv = (TextView) findViewById(R.id.accuracyView);
-            String s = String.format("%f m\n%f m", latitude, longitude);
-            tv.setText(s);
+            try {
+                lat = Double.toString(lastLocation.getLatitude());
+                lng = Double.toString(lastLocation.getLongitude());
+            } catch (IllegalStateException e) {
+                lat = "Sorry, can't";
+                lng = "find location";
+            } finally {
+                String s = String.format("%s m\n%s m", lat, lng);
+                tv.setText(s);
+            }
         }
 
         @Override
-        public void onStatusChanged(String provider, int status, Bundle extras) {}
+        public void onStatusChanged(String provider, int status, Bundle extras) {
+        }
 
         @Override
-        public void onProviderEnabled(String provider) {}
+        public void onProviderEnabled(String provider) {
+        }
 
         @Override
-        public void onProviderDisabled(String provider) {}
+        public void onProviderDisabled(String provider) {
+        }
     };
+
+    /*
+     *  Progress dialog loader code
+     */
+    public void showLoader() {
+        if (progress == null) {
+            progress = new ProgressDialog(this);
+            progress.setTitle("Loadin'");
+            progress.setMessage("Hold yer horses!");
+        }
+        progress.show();
+    }
+
+    public void dismissLoader() {
+        if (progress != null && progress.isShowing()) {
+            progress.dismiss();
+        }
+    }
+
+    /*
+     *  Toast helper method
+     */
+    public void toastIt(String s) {
+        Context c = getApplicationContext();
+        int toastingTime = Toast.LENGTH_SHORT;
+        Toast rye = Toast.makeText(c, s, toastingTime);
+        rye.show();
+    }
+
+    /*
+     *  Wifi signal tester method
+     */
+    public boolean wifiTest() {
+        ConnectivityManager connManager = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
+        NetworkInfo mWifi = connManager.getNetworkInfo(ConnectivityManager.TYPE_WIFI);
+        return mWifi.isConnected();
+    }
 
 
     /*
-        Random string builder code pulled from StackOverflow
-        This snippet will help to create message ID numbers
-        src: http://stackoverflow.com/a/5683359
+     *   Random string builder code pulled from StackOverflow
+     *   This snippet will help to create message ID numbers
+     *   src: http://stackoverflow.com/a/5683359
      */
-
     String randomString(final int length) {
-        char[] chars = "abcdefghijklmnopqrstuvwxyz1234567890".toCharArray();
+        char[] chars = "aAbBcCdDeEfFgGhHiIjJkKlLmMnNoOpPqQrRsStTuUvVwWxXyYzZ1234567890".toCharArray();
         StringBuilder sb = new StringBuilder();
         Random random = new Random();
         for (int i = 0; i < length; i++) {
             char c = chars[random.nextInt(chars.length)];
             sb.append(c);
-            }
+        }
         return sb.toString();
     }
 
     public void refresh(View v) {
-        PostMessageSpec myCallSpec = new PostMessageSpec();
-        myCallSpec.url = SERVER_URL_PREFIX + "get_local";
-        myCallSpec.context = MainActivity.this;
-        // Let's add the parameters.
-        HashMap<String,String> m = new HashMap<String,String>();
-        m.put("lat", Double.toString(latitude));
-        m.put("lng", Double.toString(longitude));
+        if ((lastLocation.getAccuracy() > GOOD_ACCURACY_METERS) || (!wifiTest())) {
+            toastIt("Can't refresh, try again later");
+        } else {
+            showLoader();
+            PostMessageSpec myCallSpec = new PostMessageSpec();
+            myCallSpec.url = SERVER_URL_PREFIX + "get_local";
+            myCallSpec.context = MainActivity.this;
+            // Let's add the parameters.
+            HashMap<String, String> m = new HashMap<>();
+            m.put("lat", lat);
+            m.put("lng", lng);
 
-        myCallSpec.setParams(m);
-        // Actual server call.
-        if (uploader != null) {
-            // There was already an upload in progress.
-            uploader.cancel(true);
+            myCallSpec.setParams(m);
+            // Actual server call.
+            if (uploader != null) {
+                // There was already an upload in progress.
+                uploader.cancel(true);
+            }
+            uploader = new ServerCall();
+            uploader.execute(myCallSpec);
         }
-        uploader = new ServerCall();
-        uploader.execute(myCallSpec);
-     }
+    }
+
+    //parse timestamp string and return the relevant time difference (1d, 1h, 30 min, etc)
+    private String getRelevantTimeDiff(String ts){
+        Date timestampDate;
+        DateFormat targetFormat = new SimpleDateFormat("yyyy-MM-dd'T'hh:mm:ss");
+        targetFormat.setTimeZone(TimeZone.getTimeZone("GMT"));
+        String formattedDate = "error";
+        long s, m, h, d;
+        try { //attempt to parse date
+            timestampDate = targetFormat.parse(ts);
+        } catch (ParseException e) {
+            e.printStackTrace();
+            return formattedDate;
+        }
+        // The server seems to be sending us localized timestamps instead of UTC, so I add 7h
+        Date now = new Date();
+        //The server gives us a localized timestamp instead of UTC, so I subtract 7h
+        Date msg =  timestampDate;
+
+        long diffInSeconds = (now.getTime() - msg.getTime()) / 1000;
+        s = (diffInSeconds >= 60 ? diffInSeconds % 60 : diffInSeconds);
+        m = (diffInSeconds = (diffInSeconds / 60)) >= 60 ? diffInSeconds % 60 : diffInSeconds;
+        h = (diffInSeconds = (diffInSeconds / 60)) >= 24 ? diffInSeconds % 24 : diffInSeconds;
+        d = (diffInSeconds / 24);
+
+        if(d > 0)         //only return days if its been over 24h
+            return d + "d";
+        else if(h > 0)    //only return hours if its been over 1h
+            return h + "h";
+        else if(m > 0)    //only return minutes if its been over 1m
+            return m + "m";
+        else if(s > 0)    //only return seconds if its been under 1m
+            return s + "s";
+        else
+            return "now";
+    }
+
 
     public void clickButton(View v) {
         // Get the text we want to send.
         EditText et = (EditText) findViewById(R.id.editText);
         String msg = et.getText().toString();
 
-        // Then, we start the call.
-        PostMessageSpec myCallSpec = new PostMessageSpec();
+        // Condition for empty string
+        if (msg == null || msg.trim().isEmpty()) {
+            toastIt("C'mon, write something!");
+        } // Condition for inaccurate parameters / disconnected device
+        else if ((lastLocation.getAccuracy() > GOOD_ACCURACY_METERS) || (!wifiTest())) {
+            toastIt("Can't post, try again later");
+            InputMethodManager inputManager = (InputMethodManager)
+                    getSystemService(Context.INPUT_METHOD_SERVICE);
+            inputManager.hideSoftInputFromWindow(getCurrentFocus().getWindowToken(),
+                    InputMethodManager.HIDE_NOT_ALWAYS);
+            et.clearFocus();
+        } else {
+            // Else, we start the call.
+            showLoader();
+            PostMessageSpec myCallSpec = new PostMessageSpec();
+            myCallSpec.url = SERVER_URL_PREFIX + "put_local";
+            myCallSpec.context = MainActivity.this;
+            // Let's add the parameters.
+            HashMap<String, String> m = new HashMap<>();
+            m.put("lat", lat);
+            m.put("lng", lng);
+            m.put("msgid", randomString(8));
+            m.put("msg", msg);
 
-        myCallSpec.url = SERVER_URL_PREFIX + "put_local";
-        myCallSpec.context = MainActivity.this;
-        // Let's add the parameters.
-        HashMap<String,String> m = new HashMap<String,String>();
-        m.put("lat", Double.toString(latitude));
-        m.put("lng", Double.toString(longitude));
-        m.put("msgid", randomString(8));
-        m.put("msg", msg);
-
-        myCallSpec.setParams(m);
-        // Actual server call.
-        if (uploader != null) {
-            // There was already an upload in progress.
-            uploader.cancel(true);
-        }
-        uploader = new ServerCall();
-        uploader.execute(myCallSpec);
-        //hideSoftKeyboard(MainActivity.this, v);
+            myCallSpec.setParams(m);
+            // Actual server call.
+            if (uploader != null) {
+                // There was already an upload in progress.
+                uploader.cancel(true);
+            }
+            uploader = new ServerCall();
+            uploader.execute(myCallSpec);
 
         /*  Snippet of code to remove focus from editText upon posting a message.
          *  http://stackoverflow.com/a/17491896
          */
-        InputMethodManager inputManager = (InputMethodManager)
-                                          getSystemService(Context.INPUT_METHOD_SERVICE);
-        inputManager.hideSoftInputFromWindow(getCurrentFocus().getWindowToken(),
-                                             InputMethodManager.HIDE_NOT_ALWAYS);
-        et.setText("");
-        et.clearFocus();
+            InputMethodManager inputManager = (InputMethodManager)
+                    getSystemService(Context.INPUT_METHOD_SERVICE);
+            inputManager.hideSoftInputFromWindow(getCurrentFocus().getWindowToken(),
+                    InputMethodManager.HIDE_NOT_ALWAYS);
+            et.setText("");
+            et.clearFocus();
+        }
     }
 
+    private void displayResult(String result) {
+        Gson gson = new Gson();
+        MessageList ml = gson.fromJson(result, MessageList.class);
+        // Fills aList, so we can fill the listView.
+        aList.clear();
+        for (int i = 0; i < ml.messages.length; i++) {
+            ListElement ael = new ListElement();
+            /* adds the message body to the text label in the app view
+            -- pulls this from the message class by indexing into the message
+            -- list and obtaining the type */
+            String formattedDate = getRelevantTimeDiff(ml.messages[i].ts);
+            ael.textLabel = ml.messages[i].msg;
+            ael.timeText = formattedDate;
+            ael.messageID = ml.messages[i].msgid;
+            ael.timeStamp = ml.messages[i].ts;
+            aList.add(ael);
+        }
+        ListView myListView = (ListView) findViewById(R.id.listView);
+        myListView.setAdapter(aa);
+        aa.notifyDataSetChanged();
+        dismissLoader();
+    }
+
+
+    @Override
+    public boolean onCreateOptionsMenu(Menu menu) {
+        // Inflate the menu; this adds items to the action bar if it is present.
+        //getMenuInflater().inflate(R.menu.menu_main, menu);
+        return true;
+    }
+
+    @Override
+    public boolean onOptionsItemSelected(MenuItem item) {
+        // Handle action bar item clicks here. The action bar will
+        // automatically handle clicks on the Home/Up button, so long
+        // as you specify a parent activity in AndroidManifest.xml.
+        int id = item.getItemId();
+
+        //noinspection SimplifiableIfStatement
+        if (id == R.id.action_settings) {
+            return true;
+        }
+        return super.onOptionsItemSelected(item);
+    }
 
     /**
      * This class is used to do the HTTP call, and it specifies how to use the result.
@@ -289,47 +421,4 @@ public class MainActivity extends ActionBarActivity {
             }
         }
     }
-
-    private void displayResult(String result) {
-        Gson gson = new Gson();
-        MessageList ml = gson.fromJson(result, MessageList.class);
-        // Fills aList, so we can fill the listView.
-        aList.clear();
-        for (int i = 0; i < ml.messages.length; i++) {
-            ListElement ael = new ListElement();
-            /* adds the message body to the text label in the app view
-            -- pulls this from the message class by indexing into the message
-            -- list and obtaining the type */
-            ael.textLabel = ml.messages[i].msg;
-            aList.add(ael);
-        }
-        aa = new MyAdapter(this, R.layout.list_element, aList);
-        ListView myListView = (ListView) findViewById(R.id.listView);
-        myListView.setAdapter(aa);
-        aa.notifyDataSetChanged();
-    }
-
-
-    @Override
-    public boolean onCreateOptionsMenu(Menu menu) {
-        // Inflate the menu; this adds items to the action bar if it is present.
-        getMenuInflater().inflate(R.menu.menu_main, menu);
-        return true;
-    }
-
-    @Override
-    public boolean onOptionsItemSelected(MenuItem item) {
-        // Handle action bar item clicks here. The action bar will
-        // automatically handle clicks on the Home/Up button, so long
-        // as you specify a parent activity in AndroidManifest.xml.
-        int id = item.getItemId();
-
-        //noinspection SimplifiableIfStatement
-        if (id == R.id.action_settings) {
-            return true;
-        }
-
-        return super.onOptionsItemSelected(item);
-    }
-
 }
