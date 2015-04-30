@@ -27,15 +27,15 @@ import android.widget.Toast;
 
 import com.google.gson.Gson;
 
-import java.text.SimpleDateFormat;
 import java.text.DateFormat;
 import java.text.ParseException;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Random;
 import java.util.TimeZone;
-import java.util.Date;
 
 
 public class MainActivity extends ActionBarActivity {
@@ -244,6 +244,10 @@ public class MainActivity extends ActionBarActivity {
         return sb.toString();
     }
 
+    /*
+     *  Refresh function pulls newly posted messages onto the screen after checking
+     *  to see if the Wifi connection is still good and the accuracy is in range.
+     */
     public void refresh(View v) {
         if ((lastLocation.getAccuracy() > GOOD_ACCURACY_METERS) || (!wifiTest())) {
             toastIt("Can't refresh, try again later");
@@ -268,43 +272,11 @@ public class MainActivity extends ActionBarActivity {
         }
     }
 
-    //parse timestamp string and return the relevant time difference (1d, 1h, 30 min, etc)
-    private String getRelevantTimeDiff(String ts){
-        Date timestampDate;
-        DateFormat targetFormat = new SimpleDateFormat("yyyy-MM-dd'T'hh:mm:ss");
-        targetFormat.setTimeZone(TimeZone.getTimeZone("GMT"));
-        String formattedDate = "error";
-        long s, m, h, d;
-        try { //attempt to parse date
-            timestampDate = targetFormat.parse(ts);
-        } catch (ParseException e) {
-            e.printStackTrace();
-            return formattedDate;
-        }
-        // The server seems to be sending us localized timestamps instead of UTC, so I add 7h
-        Date now = new Date();
-        //The server gives us a localized timestamp instead of UTC, so I subtract 7h
-        Date msg =  timestampDate;
-
-        long diffInSeconds = (now.getTime() - msg.getTime()) / 1000;
-        s = (diffInSeconds >= 60 ? diffInSeconds % 60 : diffInSeconds);
-        m = (diffInSeconds = (diffInSeconds / 60)) >= 60 ? diffInSeconds % 60 : diffInSeconds;
-        h = (diffInSeconds = (diffInSeconds / 60)) >= 24 ? diffInSeconds % 24 : diffInSeconds;
-        d = (diffInSeconds / 24);
-
-        if(d > 0)         //only return days if its been over 24h
-            return d + "d";
-        else if(h > 0)    //only return hours if its been over 1h
-            return h + "h";
-        else if(m > 0)    //only return minutes if its been over 1m
-            return m + "m";
-        else if(s > 0)    //only return seconds if its been under 1m
-            return s + "s";
-        else
-            return "now";
-    }
-
-
+    /*
+     *  clickButton posts a new message constructed locally and pulls new messages
+     *  posted to the server after checking to see if the Wifi connection is still
+     *  good and the accuracy is in range.
+     */
     public void clickButton(View v) {
         // Get the text we want to send.
         EditText et = (EditText) findViewById(R.id.editText);
@@ -355,6 +327,45 @@ public class MainActivity extends ActionBarActivity {
         }
     }
 
+    //parse timestamp string and return the relevant time difference (1d, 1h, 30 min, etc)
+    private String getRelevantTimeDiff(String ts){
+        Date timestampDate;
+        DateFormat targetFormat = new SimpleDateFormat("yyyy-MM-dd'T'hh:mm:ss");
+        targetFormat.setTimeZone(TimeZone.getTimeZone("GMT"));
+        String formattedDate = "error";
+        long s, m, h, d;
+        try { //attempt to parse date
+            timestampDate = targetFormat.parse(ts);
+        } catch (ParseException e) {
+            e.printStackTrace();
+            return formattedDate;
+        }
+        // The server seems to be sending us localized timestamps instead of UTC, so I add 7h
+        Date now = new Date();
+        //The server gives us a localized timestamp instead of UTC, so I subtract 7h
+        Date msg =  timestampDate;
+
+        long diffInSeconds = (now.getTime() - msg.getTime()) / 1000;
+        s = (diffInSeconds >= 60 ? diffInSeconds % 60 : diffInSeconds);
+        m = (diffInSeconds = (diffInSeconds / 60)) >= 60 ? diffInSeconds % 60 : diffInSeconds;
+        h = (diffInSeconds = (diffInSeconds / 60)) >= 24 ? diffInSeconds % 24 : diffInSeconds;
+        d = (diffInSeconds / 24);
+
+        if(d > 0)         //only return days if its been over 24h
+            return d + "d";
+        else if(h > 0)    //only return hours if its been over 1h
+            return h + "h";
+        else if(m > 0)    //only return minutes if its been over 1m
+            return m + "m";
+        else if(s > 0)    //only return seconds if its been under 1m
+            return s + "s";
+        else
+            return "now";
+    }
+
+    /*
+     *  Applies all properties to be updated to every element of the list view.
+     */
     private void displayResult(String result) {
         Gson gson = new Gson();
         MessageList ml = gson.fromJson(result, MessageList.class);
@@ -366,10 +377,10 @@ public class MainActivity extends ActionBarActivity {
             -- pulls this from the message class by indexing into the message
             -- list and obtaining the type */
             String formattedDate = getRelevantTimeDiff(ml.messages[i].ts);
-            ael.textLabel = ml.messages[i].msg;
-            ael.timeText = formattedDate;
-            ael.messageID = ml.messages[i].msgid;
-            ael.timeStamp = ml.messages[i].ts;
+            ael.textLabel = ml.messages[i].msg;     // message body
+            ael.timeText = formattedDate;           // timestamp text
+            ael.messageID = ml.messages[i].msgid;   // message ID
+            ael.timeStamp = ml.messages[i].ts;      // timestamp data
             aList.add(ael);
         }
         ListView myListView = (ListView) findViewById(R.id.listView);
