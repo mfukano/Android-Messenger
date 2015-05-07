@@ -4,30 +4,19 @@
     android:layout_height="match_parent"
     android:padding="8dp">
 
-    <ImageView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:id="@+id/imageView"
-        android:visibility="visible"
-        android:layout_weight="0.1"
-        android:minWidth="12dp"
-        android:maxWidth="12dp"
-        android:layout_marginRight = "4dp"
-        android:src="@drawable/greendot" />
-
     <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="New Text"
         android:id="@+id/itemText"
-        android:layout_weight="0.8" />
+        android:layout_weight="1" />
 
     <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="New Text"
         android:id="@+id/timeSince"
-        android:layout_weight="0.1"
+        android:layout_weight="0.15"
         android:minWidth="40dp"
         android:nestedScrollingEnabled="true"
         android:maxWidth="40dp"

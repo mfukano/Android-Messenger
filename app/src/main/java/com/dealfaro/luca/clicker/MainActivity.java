@@ -1,5 +1,17 @@
 package com.dealfaro.luca.clicker;
 
+/*
+ *  Assignment 3 -- Public and Private Messaging
+ *  Mat Fukano -- mfukano
+ *  5/7/2015
+ *
+ *  This is an app that allows you to publicly post bulletins in your area, and also
+ *  privately and anonymously message those around you that have posted bulletins. In order
+ *  to message someone, you need to both have posted bulletins, otherwise they won't be able to
+ *  retrieve your messages.
+ */
+
+
 import android.app.ProgressDialog;
 import android.content.Context;
 import android.content.Intent;
@@ -20,7 +32,9 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.view.inputmethod.InputMethodManager;
 import android.widget.ArrayAdapter;
+import android.widget.Button;
 import android.widget.EditText;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ListView;
 import android.widget.TextView;
@@ -38,7 +52,6 @@ import java.util.List;
 import java.util.Random;
 import java.util.TimeZone;
 
-
 public class MainActivity extends ActionBarActivity {
     Location lastLocation;
     private static final String LOG_TAG = "lclicker";
@@ -55,26 +68,18 @@ public class MainActivity extends ActionBarActivity {
     private ServerCall uploader;
     private ProgressDialog progress;
 
+    // Some helper variables
     AppInfo appInfo;
-
+    Boolean refreshed;
     private String userid;
-    private String dest;
 
-    private class ListElement {
-        ListElement() {}
-        public String textLabel;
-        public String timeText;
-        public String timeStamp;
-        public String messageID;
-    }
+    private ArrayList<Message> aList;
 
-    private ArrayList<ListElement> aList;
-
-    private class MyAdapter extends ArrayAdapter<ListElement> {
+    private class MyAdapter extends ArrayAdapter<Message> {
         int resource;
         Context context;
 
-        public MyAdapter(Context _context, int _resource, List<ListElement> items) {
+        public MyAdapter(Context _context, int _resource, List<Message> items) {
             super(_context, _resource, items);
             resource = _resource;
             context = _context;
@@ -84,7 +89,7 @@ public class MainActivity extends ActionBarActivity {
         @Override
         public View getView(int position, View convertView, ViewGroup parent) {
             LinearLayout newView;
-            ListElement w = getItem(position);
+            Message w = getItem(position);
 
             // Inflate a new view if necessary.
             if (convertView == null) {
@@ -96,21 +101,29 @@ public class MainActivity extends ActionBarActivity {
                 newView = (LinearLayout) convertView;
             }
 
-            // Fills in the view.
+            // Sets views to proper tags, with relevant time diff and message body.
             TextView tv = (TextView) newView.findViewById(R.id.itemText);
-            tv.setText(w.textLabel);
+            tv.setText(w.msg);
 
             TextView cv = (TextView) newView.findViewById(R.id.timeSince);
-            cv.setText(w.timeText);
+            cv.setText(getRelevantTimeDiff(w.ts));
+
+            ImageView image = (ImageView)newView.findViewById(R.id.imageView);
+            if(w.conversation) image.setVisibility(View.VISIBLE);
+            else image.setVisibility(View.INVISIBLE);
 
             // Set a listener for the whole list item.
-            newView.setTag(w.messageID);
+            newView.setTag(w.userid);
             newView.setOnClickListener(new View.OnClickListener() {
                 @Override
                 public void onClick(View v) {
-                    Intent intent = new Intent(MainActivity.this, ChatActivity.class);
-                    intent.putExtra("dest", dest);
-                    context.startActivity(intent);
+                    String s = v.getTag().toString();
+                    if(!appInfo.userid.equals(s)) {
+                        Intent intent = new Intent(MainActivity.this, ChatActivity.class);
+                        intent.putExtra("dest", s);
+                        context.startActivity(intent);
+                    }
+                    else toastIt("Don't be a loner and chat with yourself!");
                 }
             });
             return newView;
@@ -119,14 +132,22 @@ public class MainActivity extends ActionBarActivity {
 
     private MyAdapter aa;
 
-    @Override
+    /*
+        Gets the username & sets adaptors when app is created
+     */
+
+
+@Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         appInfo = AppInfo.getInstance(this);
+        userid = appInfo.userid;
         setContentView(R.layout.activity_main);
         aList = new ArrayList<>();
         aa = new MyAdapter(this, R.layout.list_element, aList);
         ListView myListView = (ListView) findViewById(R.id.listView);
+        TextView uv = (TextView) findViewById(R.id.userView);
+        uv.setText("Public");
         myListView.setAdapter(aa);
         aa.notifyDataSetChanged();
     }
@@ -134,6 +155,7 @@ public class MainActivity extends ActionBarActivity {
     @Override
     protected void onStart() {
         super.onStart();
+        showLoader();       // Shows loader on start to prevent null calls while location loads
     }
 
     @Override
@@ -141,11 +163,13 @@ public class MainActivity extends ActionBarActivity {
         super.onResume();
         // First super, then do stuff.
         // Let us display the previous posts, if any.
+        refreshed = false;
         SharedPreferences settings = PreferenceManager.getDefaultSharedPreferences(this);
         String result = settings.getString(PREF_POSTS, null);
         if (result != null) {
             displayResult(result);
         }
+        showLoader();       // Shows loader before auto-refresh to make the transition seem smoother
         LocationManager locationManager = (LocationManager) this.getSystemService(Context.LOCATION_SERVICE);
         locationManager.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, 0, 0, locationListener);
         locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 0, 0, locationListener);
@@ -172,8 +196,13 @@ public class MainActivity extends ActionBarActivity {
             lastLocation = location;
             TextView tv = (TextView) findViewById(R.id.accuracyView);
             try {
-                lat = Double.toString(lastLocation.getLatitude());
-                lng = Double.toString(lastLocation.getLongitude());
+                    lat = Double.toString(lastLocation.getLatitude());
+                    lng = Double.toString(lastLocation.getLongitude());
+                if(!refreshed) {    // ensures refresh only happens ONCE on location change
+                    Button rf = (Button) findViewById(R.id.button2);
+                    rf.performClick();
+                    refreshed = true;
+                }
             } catch (IllegalStateException e) {
                 lat = "Sorry, can't";
                 lng = "find location";
@@ -204,14 +233,40 @@ public class MainActivity extends ActionBarActivity {
             progress = new ProgressDialog(this);
             progress.setTitle("Loadin'");
             progress.setMessage("Hold yer horses!");
+            progress.setCancelable(false);
         }
         progress.show();
+        disableUIButtons();
     }
 
     public void dismissLoader() {
         if (progress != null && progress.isShowing()) {
             progress.dismiss();
+            enableUIButtons();
         }
+    }
+
+    /*
+        UI Button helper methods; disables the UI buttons by
+        finding them in the view if something's not loaded yet.
+     */
+
+    public void disableUIButtons() {
+        Button post=(Button)findViewById(R.id.button);
+        Button refresh=(Button)findViewById(R.id.button2);
+        post.setEnabled(false);
+        post.setClickable(false);
+        refresh.setEnabled(false);
+        refresh.setClickable(false);
+    }
+
+    public void enableUIButtons(){
+        Button post=(Button)findViewById(R.id.button);
+        Button refresh=(Button)findViewById(R.id.button2);
+        post.setEnabled(true);
+        post.setClickable(true);
+        refresh.setEnabled(true);
+        refresh.setClickable(true);
     }
 
     /*
@@ -232,7 +287,6 @@ public class MainActivity extends ActionBarActivity {
         NetworkInfo mWifi = connManager.getNetworkInfo(ConnectivityManager.TYPE_WIFI);
         return mWifi.isConnected();
     }
-
 
     /*
      *   Random string builder code pulled from StackOverflow
@@ -255,7 +309,7 @@ public class MainActivity extends ActionBarActivity {
      *  to see if the Wifi connection is still good and the accuracy is in range.
      */
     public void refresh(View v) {
-        if ((lastLocation.getAccuracy() > GOOD_ACCURACY_METERS) || (!wifiTest())) {
+        if (!wifiTest()) {
             toastIt("Can't refresh, try again later");
         } else {
             showLoader();
@@ -266,6 +320,7 @@ public class MainActivity extends ActionBarActivity {
             HashMap<String, String> m = new HashMap<>();
             m.put("lat", lat);
             m.put("lng", lng);
+            m.put("userid", userid);
 
             myCallSpec.setParams(m);
             // Actual server call.
@@ -307,9 +362,9 @@ public class MainActivity extends ActionBarActivity {
             myCallSpec.context = MainActivity.this;
             // Let's add the parameters.
             HashMap<String, String> m = new HashMap<>();
-            m.put("userid", appInfo.userid);
             m.put("lat", lat);
             m.put("lng", lng);
+            m.put("userid", userid);
             m.put("msgid", randomString(8));
             m.put("msg", msg);
 
@@ -358,13 +413,13 @@ public class MainActivity extends ActionBarActivity {
         h = (diffInSeconds = (diffInSeconds / 60)) >= 24 ? diffInSeconds % 24 : diffInSeconds;
         d = (diffInSeconds / 24);
 
-        if(d > 0)         //only return days if its been over 24h
+        if(d > 0)         //only return days if it's been over 24h
             return d + "d";
-        else if(h > 0)    //only return hours if its been over 1h
+        else if(h > 0)    //only return hours if it's been over 1h
             return h + "h";
-        else if(m > 0)    //only return minutes if its been over 1m
+        else if(m > 0)    //only return minutes if it's been over 1m
             return m + "m";
-        else if(s > 0)    //only return seconds if its been under 1m
+        else if(s > 0)    //only return seconds if it's been under 1m
             return s + "s";
         else
             return "now";
@@ -379,28 +434,25 @@ public class MainActivity extends ActionBarActivity {
         // Fills aList, so we can fill the listView.
         aList.clear();
         for (int i = 0; i < ml.messages.length; i++) {
-            ListElement ael = new ListElement();
+            Message ael = new Message();
             /* adds the message body to the text label in the app view
             -- pulls this from the message class by indexing into the message
             -- list and obtaining the type */
             String formattedDate = getRelevantTimeDiff(ml.messages[i].ts);
-            ael.textLabel = ml.messages[i].msg;     // message body
-            ael.timeText = formattedDate;           // timestamp text
-            ael.messageID = ml.messages[i].msgid;   // message ID
-            ael.timeStamp = ml.messages[i].ts;      // timestamp data
+            ael = ml.messages[i];     // Sets current message to current list element
             aList.add(ael);
         }
         ListView myListView = (ListView) findViewById(R.id.listView);
         myListView.setAdapter(aa);
         aa.notifyDataSetChanged();
-        dismissLoader();
+        dismissLoader();        // granular filter for loader; clears after results are ready
     }
 
 
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
-        // Inflate the menu; this adds items to the action bar if it is present.
-        //getMenuInflater().inflate(R.menu.menu_main, menu);
+        //Inflate the menu; this adds items to the action bar if it is present.
+        getMenuInflater().inflate(R.menu.menu_main, menu);
         return true;
     }
 

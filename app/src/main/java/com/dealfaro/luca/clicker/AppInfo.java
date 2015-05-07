@@ -12,7 +12,7 @@ import java.security.SecureRandom;
  */
 public class AppInfo {
 
-    public static final String PREF_USERID = "userid";
+    public static final String PREF_USERID = "mat";
 
     private static AppInfo instance = null;
 
