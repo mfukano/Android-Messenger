@@ -1,5 +1,9 @@
 package com.dealfaro.luca.clicker;
 
+/**
+ * Created by matfukano on 5/6/15.
+ */
+
 import android.app.ProgressDialog;
 import android.content.Context;
 import android.content.Intent;
@@ -38,11 +42,10 @@ import java.util.List;
 import java.util.Random;
 import java.util.TimeZone;
 
-
-public class MainActivity extends ActionBarActivity {
+public class ChatActivity extends ActionBarActivity {
     Location lastLocation;
     private static final String LOG_TAG = "lclicker";
-    private static final String SERVER_URL_PREFIX = "https://hw3n-dot-luca-teaching.appspot.com/store/default/";
+    private static final String SERVER_URL_PREFIX = "https://luca-teaching.appspot.com/store/default/";
     private static final float GOOD_ACCURACY_METERS = 100;
 
     private String lat;
@@ -57,8 +60,9 @@ public class MainActivity extends ActionBarActivity {
 
     AppInfo appInfo;
 
-    private String userid;
-    private String dest;
+    //private String userid;
+    Intent intent = getIntent();
+    private String dest = intent.getStringExtra("dest");
 
     private class ListElement {
         ListElement() {}
@@ -108,9 +112,8 @@ public class MainActivity extends ActionBarActivity {
             newView.setOnClickListener(new View.OnClickListener() {
                 @Override
                 public void onClick(View v) {
-                    Intent intent = new Intent(MainActivity.this, ChatActivity.class);
-                    intent.putExtra("dest", dest);
-                    context.startActivity(intent);
+                    String s = v.getTag().toString();
+                    toastIt(s);
                 }
             });
             return newView;
@@ -261,11 +264,13 @@ public class MainActivity extends ActionBarActivity {
             showLoader();
             PostMessageSpec myCallSpec = new PostMessageSpec();
             myCallSpec.url = SERVER_URL_PREFIX + "get_local";
-            myCallSpec.context = MainActivity.this;
+            myCallSpec.context = ChatActivity.this;
             // Let's add the parameters.
             HashMap<String, String> m = new HashMap<>();
             m.put("lat", lat);
             m.put("lng", lng);
+            m.put("userid", appInfo.userid);
+            m.put("dest", dest);
 
             myCallSpec.setParams(m);
             // Actual server call.
@@ -304,10 +309,11 @@ public class MainActivity extends ActionBarActivity {
             showLoader();
             PostMessageSpec myCallSpec = new PostMessageSpec();
             myCallSpec.url = SERVER_URL_PREFIX + "put_local";
-            myCallSpec.context = MainActivity.this;
+            myCallSpec.context = ChatActivity.this;
             // Let's add the parameters.
             HashMap<String, String> m = new HashMap<>();
             m.put("userid", appInfo.userid);
+            m.put("dest", dest);
             m.put("lat", lat);
             m.put("lng", lng);
             m.put("msgid", randomString(8));
@@ -440,3 +446,4 @@ public class MainActivity extends ActionBarActivity {
         }
     }
 }
+

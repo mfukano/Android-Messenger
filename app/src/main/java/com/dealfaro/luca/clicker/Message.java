@@ -5,9 +5,15 @@ package com.dealfaro.luca.clicker;
  *
  * Message contains properties of post object.
  */
+
 public class Message {
     public Message() {};
-    String msg;
-    String msgid;
-    String ts;
+
+    public String msg;
+    public String userid;
+    public String dest;
+    public String ts;
+    public String msgid;
+    public Boolean conversation;
+
 }
