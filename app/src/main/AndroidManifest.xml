@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="com.dealfaro.luca.clicker" >
+    package="com.fukano.mat.bbchat" >
 
     <uses-permission android:name="android.permission.GET_ACCOUNTS" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
@@ -14,7 +14,7 @@
         android:label="@string/app_name"
         android:theme="@style/AppBaseTheme" >
         <activity
-            android:name="com.dealfaro.luca.clicker.MainActivity"
+            android:name="com.fukano.mat.bbchat.MainActivity"
             android:label="@string/app_name" >
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -23,7 +23,7 @@
             </intent-filter>
         </activity>
         <activity
-            android:name="com.dealfaro.luca.clicker.ChatActivity"
+            android:name="com.fukano.mat.bbchat.ChatActivity"
             android:label="@string/title_activity_chat" >
         </activity>
     </application>
